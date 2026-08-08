@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+/*
+  Hamyon — a dollar account that happens to settle on Base.
+  The visual thesis is a bank passbook, not a crypto dashboard: money is set in
+  a serif with tabular figures, and one continuous rule system runs from the
+  balance down through the activity list so the whole screen reads as a single
+  running ledger.
+
+  Palette is drawn from Uzbek ikat dye — indigo and saffron — over a cool paper
+  ground rather than the warm cream that fintech defaults to.
+*/
+
+@theme {
+  --color-paper: #f6f7fb;
+  --color-card: #ffffff;
+  --color-ink: #10182b;
+  --color-ink-soft: #5b6478;
+  --color-ink-faint: #8b93a5;
+  --color-line: #e3e6ef;
+  --color-line-strong: #cdd3e2;
+
+  --color-indigo: #2c3fa8;
+  --color-indigo-hover: #24358f;
+  --color-indigo-wash: #eef1fb;
+
+  --color-saffron: #e8a317;
+  --color-saffron-wash: #fdf4e0;
+
+  --color-credit: #0e8a5f;
+  --color-debit: #c0392b;
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-card: 14px;
+}
+
+/*
+  Dark mode keeps the same ink-on-paper logic, just inverted into deep navy —
+  the indigo lifts so it stays legible as an action colour on a dark ground.
+
+  These are plain `:root` overrides, not a second `@theme` block: Tailwind
+  hoists `@theme` to the root and drops the surrounding media query, which
+  would silently make the dark palette unconditional.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: #0b1020;
+    --color-card: #131a2e;
+    --color-ink: #eef1f8;
+    --color-ink-soft: #9aa4bd;
+    --color-ink-faint: #6b7591;
+    --color-line: #232c46;
+    --color-line-strong: #333e5e;
+
+    --color-indigo: #8f9fff;
+    --color-indigo-hover: #a6b3ff;
+    --color-indigo-wash: #1a2244;
+
+    --color-saffron: #f0b545;
+    --color-saffron-wash: #2a2213;
+
+    --color-credit: #3fbb8b;
+    --color-debit: #f0705f;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv05" 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Money and addresses must never reflow as digits change. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-indigo);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-indigo);
+    color: white;
+  }
+}
+
+@layer components {
+  /* The eyebrow that titles each ledger section. */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  /*
+    The signature: a rule that reads as a ledger line rather than a border.
+    Slightly heavier at the left edge, fading right, so rows feel written onto
+    the page instead of boxed in.
+  */
+  .ledger-rule {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      var(--color-line-strong) 0%,
+      var(--color-line) 55%,
+      transparent 100%
+    );
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px)) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,3 @@
+# Runs before any application module, so the bson/v8 shim is in place before
+# mongoose is imported. See src/bun-compat.ts for why it's needed.
+preload = ["./src/bun-compat.ts"]

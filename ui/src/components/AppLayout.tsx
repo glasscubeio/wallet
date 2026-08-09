@@ -16,7 +16,7 @@ export default function AppLayout() {
 
   async function handleLogout() {
     await logout();
-    navigate("/login", { replace: true });
+    void navigate("/login", { replace: true });
   }
 
   return (

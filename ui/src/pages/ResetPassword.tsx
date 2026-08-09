@@ -26,7 +26,7 @@ export default function ResetPassword() {
     try {
       await authApi.resetPassword({ email, code, password });
       toast.success("Password updated. Sign in with your new password.");
-      navigate("/login", { replace: true });
+      void navigate("/login", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.details).length) setErrors(err.details);
       else setErrors({ _: err instanceof Error ? err.message : "Something went wrong" });

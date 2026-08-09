@@ -31,7 +31,11 @@ import {
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Issues a rotated refresh token + access token and sets both cookies. */
-async function startSession(res: Response, req: Request, user: UserDoc): Promise<void> {
+async function startSession(
+  res: Response,
+  req: Request,
+  user: UserDoc,
+): Promise<void> {
   const jti = crypto.randomUUID();
   const refreshToken = signRefreshToken(user, jti);
   const accessToken = signAccessToken(user);
@@ -60,7 +64,8 @@ export async function register(req: Request, res: Response): Promise<void> {
   if (clash) {
     const details: Record<string, string> = {};
     if (clash.email === email) details.email = "Email is already registered";
-    if (clash.username === username) details.username = "Username is already taken";
+    if (clash.username === username)
+      details.username = "Username is already taken";
     throw ApiError.conflict("Account already exists", "duplicate", details);
   }
 
@@ -81,7 +86,10 @@ export async function register(req: Request, res: Response): Promise<void> {
           address: wallet.address,
         });
       }
-      const { code } = await issueOtp({ userId: user._id, purpose: OTP_PURPOSE.VERIFY_EMAIL });
+      const { code } = await issueOtp({
+        userId: user._id,
+        purpose: OTP_PURPOSE.VERIFY_EMAIL,
+      });
       await sendVerifyEmail({ to: user.email, username: user.username, code });
     } catch (err) {
       console.error("[register] post-signup email failed", err);
@@ -90,12 +98,17 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   res.status(201).json({
     user: user.toPublic(),
-    wallet: wallet ? { address: wallet.address, network: wallet.network } : null,
+    wallet: wallet
+      ? { address: wallet.address, network: wallet.network }
+      : null,
   });
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
-  const { identifier, password } = req.body as { identifier: string; password: string };
+  const { identifier, password } = req.body as {
+    identifier: string;
+    password: string;
+  };
 
   const query = identifier.includes("@")
     ? { email: identifier.toLowerCase() }
@@ -106,11 +119,17 @@ export async function login(req: Request, res: Response): Promise<void> {
   // Same message and roughly the same work either way, so the response can't
   // be used to enumerate which usernames exist.
   if (!user || !(await user.comparePassword(password))) {
-    throw ApiError.unauthorized("Incorrect email or password", "bad_credentials");
+    throw ApiError.unauthorized(
+      "Incorrect email or password",
+      "bad_credentials",
+    );
   }
 
   if (env.REQUIRE_EMAIL_VERIFICATION && !user.emailVerifiedAt) {
-    throw ApiError.forbidden("Verify your email before signing in", "email_unverified");
+    throw ApiError.forbidden(
+      "Verify your email before signing in",
+      "email_unverified",
+    );
   }
 
   await tryEnsureWallet(user._id);
@@ -134,11 +153,18 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   const tokenHash = hashToken(token);
   const session = await Session.findOne({ tokenHash, user: sub });
 
-  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
+  if (
+    !session ||
+    session.revokedAt ||
+    session.expiresAt.getTime() <= Date.now()
+  ) {
     // A valid JWT whose session row is gone means it was already rotated —
     // treat as replay and drop every session for that user.
     if (!session) {
-      await Session.updateMany({ user: sub }, { $set: { revokedAt: new Date() } });
+      await Session.updateMany(
+        { user: sub },
+        { $set: { revokedAt: new Date() } },
+      );
     }
     clearAuthCookies(res);
     throw ApiError.unauthorized("Session expired", "session_revoked");
@@ -175,30 +201,45 @@ export async function me(req: Request, res: Response): Promise<void> {
   const wallet = await Wallet.findOne({ user: user._id });
   res.json({
     user: user.toPublic(),
-    wallet: wallet ? { address: wallet.address, network: wallet.network } : null,
+    wallet: wallet
+      ? { address: wallet.address, network: wallet.network }
+      : null,
   });
 }
 
 /* ---------------------------------- email --------------------------------- */
 
-export async function requestEmailVerification(req: Request, res: Response): Promise<void> {
+export async function requestEmailVerification(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const user = requireUser(req);
   if (user.emailVerifiedAt) {
     res.json({ ok: true, alreadyVerified: true });
     return;
   }
 
-  const { code } = await issueOtp({ userId: user._id, purpose: OTP_PURPOSE.VERIFY_EMAIL });
+  const { code } = await issueOtp({
+    userId: user._id,
+    purpose: OTP_PURPOSE.VERIFY_EMAIL,
+  });
   await sendVerifyEmail({ to: user.email, username: user.username, code });
 
   res.json({ ok: true });
 }
 
-export async function confirmEmailVerification(req: Request, res: Response): Promise<void> {
+export async function confirmEmailVerification(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const user = requireUser(req);
   const { code } = req.body as { code: string };
 
-  await consumeOtp({ userId: user._id, purpose: OTP_PURPOSE.VERIFY_EMAIL, code });
+  await consumeOtp({
+    userId: user._id,
+    purpose: OTP_PURPOSE.VERIFY_EMAIL,
+    code,
+  });
 
   user.emailVerifiedAt = new Date();
   await user.save();
@@ -208,36 +249,61 @@ export async function confirmEmailVerification(req: Request, res: Response): Pro
 
 /* -------------------------------- password -------------------------------- */
 
-export async function forgotPassword(req: Request, res: Response): Promise<void> {
+export async function forgotPassword(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { email } = req.body as { email: string };
   const user = await User.findOne({ email: email.toLowerCase() });
 
   // Always the same response — never reveal whether the address is registered.
   if (user) {
-    const { code } = await issueOtp({ userId: user._id, purpose: OTP_PURPOSE.RESET_PASSWORD });
+    const { code } = await issueOtp({
+      userId: user._id,
+      purpose: OTP_PURPOSE.RESET_PASSWORD,
+    });
     try {
-      await sendResetPasswordEmail({ to: user.email, username: user.username, code });
+      await sendResetPasswordEmail({
+        to: user.email,
+        username: user.username,
+        code,
+      });
     } catch (err) {
       console.error("[forgotPassword] email failed", err);
     }
   }
 
-  res.json({ ok: true, message: "If that email is registered, a reset code is on its way." });
+  res.json({
+    ok: true,
+    message: "If that email is registered, a reset code is on its way.",
+  });
 }
 
-export async function resetPassword(req: Request, res: Response): Promise<void> {
+export async function resetPassword(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { email, code, password } = req.body as {
     email: string;
     code: string;
     password: string;
   };
 
-  const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+  const user = await User.findOne({ email: email.toLowerCase() }).select(
+    "+password",
+  );
   if (!user) {
-    throw ApiError.badRequest("That code is no longer valid. Request a new one.", "otp_missing");
+    throw ApiError.badRequest(
+      "That code is no longer valid. Request a new one.",
+      "otp_missing",
+    );
   }
 
-  await consumeOtp({ userId: user._id, purpose: OTP_PURPOSE.RESET_PASSWORD, code });
+  await consumeOtp({
+    userId: user._id,
+    purpose: OTP_PURPOSE.RESET_PASSWORD,
+    code,
+  });
 
   user.password = password;
   await user.save();
@@ -246,17 +312,24 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   await Session.deleteMany({ user: user._id });
   clearAuthCookies(res);
 
-  res.json({ ok: true, message: "Password updated. Sign in with your new password." });
+  res.json({
+    ok: true,
+    message: "Password updated. Sign in with your new password.",
+  });
 }
 
-export async function changePassword(req: Request, res: Response): Promise<void> {
+export async function changePassword(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { currentPassword, newPassword } = req.body as {
     currentPassword: string;
     newPassword: string;
   };
 
   const user = await User.findById(requireUser(req)._id).select("+password");
-  if (!user) throw ApiError.unauthorized("Account no longer exists", "user_gone");
+  if (!user)
+    throw ApiError.unauthorized("Account no longer exists", "user_gone");
 
   if (!(await user.comparePassword(currentPassword))) {
     throw ApiError.badRequest("Current password is incorrect", "bad_password", {
@@ -276,10 +349,20 @@ export async function changePassword(req: Request, res: Response): Promise<void>
 
 /* ----------------------------- delete account ----------------------------- */
 
-export async function requestAccountDeletion(req: Request, res: Response): Promise<void> {
+export async function requestAccountDeletion(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const user = requireUser(req);
-  const { code } = await issueOtp({ userId: user._id, purpose: OTP_PURPOSE.DELETE_ACCOUNT });
-  await sendDeleteAccountEmail({ to: user.email, username: user.username, code });
+  const { code } = await issueOtp({
+    userId: user._id,
+    purpose: OTP_PURPOSE.DELETE_ACCOUNT,
+  });
+  await sendDeleteAccountEmail({
+    to: user.email,
+    username: user.username,
+    code,
+  });
   res.json({ ok: true });
 }
 
@@ -290,7 +373,10 @@ export async function requestAccountDeletion(req: Request, res: Response): Promi
  * address survives. Everything linking it to a person is gone from our side,
  * which is what deletion means here.
  */
-export async function confirmAccountDeletion(req: Request, res: Response): Promise<void> {
+export async function confirmAccountDeletion(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const user = requireUser(req);
   const { password, code } = req.body as { password: string; code: string };
 
@@ -301,7 +387,11 @@ export async function confirmAccountDeletion(req: Request, res: Response): Promi
     });
   }
 
-  await consumeOtp({ userId: user._id, purpose: OTP_PURPOSE.DELETE_ACCOUNT, code });
+  await consumeOtp({
+    userId: user._id,
+    purpose: OTP_PURPOSE.DELETE_ACCOUNT,
+    code,
+  });
 
   const purge = async (session: ClientSession | null) => {
     const opts = session ? { session } : {};
@@ -322,12 +412,17 @@ export async function confirmAccountDeletion(req: Request, res: Response): Promi
     await session.withTransaction(() => purge(session));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[delete] transactional purge unavailable (${message}); deleting sequentially`);
+    console.warn(
+      `[delete] transactional purge unavailable (${message}); deleting sequentially`,
+    );
     await purge(null);
   } finally {
     if (session) await session.endSession().catch(() => undefined);
   }
 
   clearAuthCookies(res);
-  res.json({ ok: true, message: "Your account and all associated data have been deleted." });
+  res.json({
+    ok: true,
+    message: "Your account and all associated data have been deleted.",
+  });
 }

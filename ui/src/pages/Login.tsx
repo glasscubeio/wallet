@@ -31,7 +31,7 @@ export default function Login() {
     try {
       await login(form);
       const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(from ?? "/", { replace: true });
+      void navigate(from ?? "/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.details).length) setErrors(err.details);
       else setErrors({ _: err instanceof Error ? err.message : "Something went wrong" });

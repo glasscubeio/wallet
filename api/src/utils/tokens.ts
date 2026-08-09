@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import type { CookieOptions, Response } from "express";
-import { env, isProd } from "../config/env.ts";
+import { env, cookieSecure } from "../config/env.ts";
 import type { UserDoc } from "../models/User.ts";
 
 export const ACCESS_COOKIE = "hamyon_at";
@@ -25,15 +25,19 @@ export interface RefreshPayload {
 /**
  * Cross-subdomain in production (api on wa.*, app on wallet.*), so the cookie
  * must be scoped to the shared parent domain and marked SameSite=None+Secure.
- * On localhost both run on 127.0.0.1 with different ports, which is same-site,
- * so Lax over http works.
+ * On localhost the two differ only by port — same-site — so Lax over http works.
+ *
+ * See `cookieSecure` in config/env.ts for why this follows the scheme rather
+ * than NODE_ENV.
  */
 function baseCookie(maxAgeMs: number): CookieOptions {
   return {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "none" : "lax",
-    domain: isProd ? env.COOKIE_DOMAIN || undefined : undefined,
+    secure: cookieSecure,
+    // SameSite=None is only valid alongside Secure; pairing it with an
+    // insecure cookie makes browsers drop the cookie entirely.
+    sameSite: cookieSecure ? "none" : "lax",
+    domain: cookieSecure ? env.COOKIE_DOMAIN || undefined : undefined,
     path: "/",
     maxAge: maxAgeMs,
   };

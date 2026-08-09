@@ -38,10 +38,14 @@ export default function Register() {
 
     try {
       await register(form);
-      navigate("/", { replace: true });
+      void navigate("/", { replace: true });
     } catch (err) {
-      if (err instanceof ApiError && Object.keys(err.details).length) setErrors(err.details);
-      else setErrors({ _: err instanceof Error ? err.message : "Something went wrong" });
+      if (err instanceof ApiError && Object.keys(err.details).length)
+        setErrors(err.details);
+      else
+        setErrors({
+          _: err instanceof Error ? err.message : "Something went wrong",
+        });
     } finally {
       setSubmitting(false);
     }
@@ -91,7 +95,11 @@ export default function Register() {
           )}
         </Field>
 
-        <Field label="Password" error={errors.password} hint="At least 8 characters.">
+        <Field
+          label="Password"
+          error={errors.password}
+          hint="At least 8 characters."
+        >
           {({ id, invalid, ...aria }) => (
             <Input
               id={id}
@@ -107,7 +115,10 @@ export default function Register() {
         </Field>
 
         {errors._ && (
-          <p role="alert" className="rounded-[10px] bg-debit/8 px-3 py-2.5 text-[13px] text-debit">
+          <p
+            role="alert"
+            className="rounded-[10px] bg-debit/8 px-3 py-2.5 text-[13px] text-debit"
+          >
             {errors._}
           </p>
         )}
@@ -119,8 +130,14 @@ export default function Register() {
 
       <ul className="mt-6 space-y-2 border-t border-line pt-5">
         {PERKS.map((perk) => (
-          <li key={perk} className="flex items-start gap-2.5 text-[13px] text-ink-soft">
-            <Check className="mt-[3px] h-3.5 w-3.5 shrink-0 text-credit" aria-hidden="true" />
+          <li
+            key={perk}
+            className="flex items-start gap-2.5 text-[13px] text-ink-soft"
+          >
+            <Check
+              className="mt-0.75 h-3.5 w-3.5 shrink-0 text-credit"
+              aria-hidden="true"
+            />
             {perk}
           </li>
         ))}

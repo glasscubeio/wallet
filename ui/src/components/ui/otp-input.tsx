@@ -1,14 +1,16 @@
-import { useContext } from "react";
-import { OTPInput, OTPInputContext } from "input-otp";
+import { OTPInput, type SlotProps } from "input-otp";
 import { cn } from "@/lib/utils";
 
-function Slot({ index }: { index: number }) {
-  const { slots } = useContext(OTPInputContext);
-  const slot = slots[index];
-  if (!slot) return null;
-
-  const { char, hasFakeCaret, isActive } = slot;
-
+/**
+ * One digit box.
+ *
+ * Takes the slot straight from the `render` prop rather than reading
+ * `OTPInputContext`. The context is only populated on input-otp's `children`
+ * API — under `render` it stays empty, so `slots[index]` was undefined and
+ * this component threw `Cannot read properties of undefined`, unmounting the
+ * whole page the moment the code input appeared.
+ */
+function Slot({ char, hasFakeCaret, isActive }: SlotProps) {
   return (
     <div
       className={cn(
@@ -53,8 +55,8 @@ export function OtpField({ value, onChange, onComplete, disabled, autoFocus }: O
       containerClassName="flex items-center gap-2 has-[:disabled]:opacity-50"
       render={({ slots }) => (
         <div className="flex gap-2">
-          {slots.map((_, i) => (
-            <Slot key={i} index={i} />
+          {slots.map((slot, i) => (
+            <Slot key={i} {...slot} />
           ))}
         </div>
       )}

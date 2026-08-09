@@ -94,7 +94,54 @@ Useful along the way:
 ```bash
 bun run operator     # where to send gas money, and how much is left
 bun run typecheck    # both projects
+bun run lint         # eslint, type-aware
 bun run test:gas     # gas station end-to-end (needs Foundry)
+```
+
+### Cookies and NODE_ENV
+
+Cookie `Secure`/`SameSite` follows **the scheme in `WEB_ORIGIN`**, not
+`NODE_ENV`. This matters: a `Secure` cookie is silently discarded over plain
+http, so keying it off `NODE_ENV` meant running `NODE_ENV=production` locally
+handed the browser cookies it threw away — you'd register successfully and land
+straight back on the sign-in screen with no error anywhere. Set
+`COOKIE_SECURE` only if TLS terminates somewhere that makes the inference wrong.
+
+Loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) are accepted
+outside production, because Vite serves the same app on several of them and
+treating them as distinct origins turns a normal local run into an unexplained
+CORS failure. A refused origin is logged with the fix:
+
+```
+[cors] refused origin http://127.0.0.1:5173 — add it to WEB_ORIGIN (currently: http://localhost:9551)
+```
+
+### Rate limiting
+
+nginx owns it, and nothing else does. `api/deploy/wa.glasscube.uz.conf` holds
+the zones. The app has no limiter of its own — two independent limits on the
+same traffic just means two places to look when a legitimate request 429s. The
+trade-off: the API is unthrottled if you expose port 9550 without the proxy.
+
+### Logs
+
+HTTP access logs go to stdout via morgan, same readable format in every
+environment:
+
+```
+::1 POST /api/auth/verify-email/request 400 311 - 2193.036 ms "curl/8.7.1"
+```
+
+Successful `/health` polls are skipped so monitoring doesn't bury real traffic;
+a failing one still logs. In production: `journalctl -u hamyon-api -f`.
+
+Email failures log the provider's own words rather than being flattened into a
+generic 500 — that flattening is what made a broken verify-email button
+impossible to diagnose from the outside:
+
+```
+[email] send failed to=x@example.com subject="… verification code" status=422
+        name=validation_error: Invalid `to` field. …
 ```
 
 The API starts and reports which integrations are live:

@@ -49,7 +49,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadSession(controller.signal).finally(() => setLoading(false));
+
+    /*
+      Only clear `loading` if this request is the one that finished.
+
+      React's StrictMode mounts effects twice in development: the first /me is
+      aborted by the cleanup, and if that aborted attempt still flipped
+      `loading` to false, the route guard would see `loading === false` with
+      `user === null` and bounce to /login — then the second request would
+      resolve, and the "already signed in" guard would send you to "/". The
+      visible symptom was that deep links like /settings silently redirected
+      to the dashboard.
+    */
+    void loadSession(controller.signal).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+
     return () => controller.abort();
   }, [loadSession]);
 

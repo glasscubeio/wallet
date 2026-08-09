@@ -21,6 +21,12 @@ const schema = z.object({
   // Cookies / CORS
   WEB_ORIGIN: z.string().default("http://localhost:9551"),
   COOKIE_DOMAIN: z.string().optional(),
+  // Leave unset: it's derived from whether WEB_ORIGIN is https. Only set it if
+  // TLS terminates somewhere that makes that inference wrong.
+  COOKIE_SECURE: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
 
   // Coinbase CDP — holds each user's key and produces the EIP-712 signature.
   // Never surfaced to the user: no CDP widget, no CDP login, no browser SDK.
@@ -85,6 +91,29 @@ export const env = parsed.data;
 export type Env = typeof env;
 
 export const isProd = env.NODE_ENV === "production";
+
+/**
+ * Whether session cookies get `Secure` + `SameSite=None`.
+ *
+ * Deliberately keyed off the scheme the browser will actually use, not off
+ * NODE_ENV. A `Secure` cookie is silently discarded on plain http, so running
+ * NODE_ENV=production against http://localhost used to hand out cookies the
+ * browser threw away — the app would register a user and then bounce straight
+ * back to the sign-in screen with no error anywhere.
+ *
+ * Cross-site (`SameSite=None`) is only needed when the app and API sit on
+ * different hosts, which is exactly when WEB_ORIGIN is https. On localhost the
+ * two differ only by port, which is same-site, so `Lax` is correct there.
+ *
+ * COOKIE_SECURE overrides this if you terminate TLS somewhere unusual.
+ */
+const originsAreHttps =
+  env.WEB_ORIGIN.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .every((o) => o.startsWith("https://"));
+
+export const cookieSecure = env.COOKIE_SECURE ?? originsAreHttps;
 
 /** CDP can only sign when all three credentials are present. */
 export const cdpConfigured = Boolean(

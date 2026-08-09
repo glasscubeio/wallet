@@ -233,7 +233,7 @@ function DeleteAccountCard() {
       // The session is already dead server-side — clear local state and leave.
       await logout().catch(() => undefined);
       toast.success("Your account has been deleted.");
-      navigate("/register", { replace: true });
+      void navigate("/register", { replace: true });
     } catch (err) {
       setErrors(details(err));
       setCode("");

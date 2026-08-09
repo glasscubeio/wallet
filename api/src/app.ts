@@ -22,18 +22,57 @@ export function createApp(): Express {
   app.use(compression());
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
-  app.use(morgan(isProd ? "combined" : "dev"));
+
+  /*
+    HTTP logging.
+
+    Same readable format in every environment — production used to switch to
+    Apache "combined", which is built for log shipping and is close to
+    unreadable when you're tailing it to see what an app is doing.
+
+    `immediate: false` logs on response so the status and duration are real.
+    Successful /health polls are dropped because a monitor hitting it every few
+    seconds otherwise buries the traffic you actually care about; a failing
+    health check still logs.
+  */
+  morgan.token("client-ip", (req) => (req as express.Request).ip ?? "-");
+
+  app.use(
+    morgan(
+      ':client-ip :method :url :status :res[content-length] - :response-time ms ":user-agent"',
+      {
+        skip: (req, res) => req.url === "/health" && res.statusCode < 400,
+      },
+    ),
+  );
 
   const allowedOrigins = env.WEB_ORIGIN.split(",")
     .map((o) => o.trim())
     .filter(Boolean);
 
+  // Vite serves the same app on localhost and 127.0.0.1, and `vite preview`
+  // uses a different port again. Treating those as separate origins turns a
+  // routine local run into an unexplained CORS failure, so accept any loopback
+  // origin outside production.
+  const isLoopback = (origin: string) =>
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+
   app.use(
     cors({
       // credentials:true forbids a wildcard origin, so reflect known ones only.
       origin(origin, cb) {
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-        cb(new Error(`Origin ${origin} is not allowed`));
+        // No Origin header: same-origin, curl, or a server-side call.
+        if (!origin) return cb(null, true);
+        if (allowedOrigins.includes(origin)) return cb(null, true);
+        if (!isProd && isLoopback(origin)) return cb(null, true);
+
+        // Refuse by omitting the header rather than throwing. Throwing here
+        // produces a 500 that *also* lacks CORS headers, so the browser shows
+        // a generic CORS error and the real reason never reaches anyone.
+        console.warn(
+          `[cors] refused origin ${origin} — add it to WEB_ORIGIN (currently: ${allowedOrigins.join(", ") || "empty"})`,
+        );
+        cb(null, false);
       },
       credentials: true,
       methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],

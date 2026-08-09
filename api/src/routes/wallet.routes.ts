@@ -3,7 +3,6 @@ import { z } from "zod";
 import * as wallet from "../controllers/wallet.controller.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { validate, validateQuery } from "../middleware/validate.ts";
-import { sendLimiter, otpLimiter } from "../middleware/rateLimit.ts";
 
 const router = Router();
 
@@ -27,8 +26,6 @@ router.get(
 
 router.post(
   "/send",
-  sendLimiter,
-  otpLimiter,
   validate(
     z.object({
       to: z.string().trim().min(1, "Enter a recipient address"),
@@ -41,7 +38,6 @@ router.post(
 
 router.post(
   "/send/confirm",
-  sendLimiter,
   validate(
     z.object({
       transferId: z.string().trim().min(1),

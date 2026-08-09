@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { env, resendConfigured, isProd } from "../config/env.ts";
+import { ApiError } from "../utils/ApiError.ts";
 
 let client: Resend | null = null;
 function resend(): Resend {
@@ -32,10 +33,59 @@ async function send({ to, subject, html, text }: SendArgs): Promise<{ id: string
   });
 
   if (error) {
-    console.error("[email] send failed", error);
-    throw new Error(error.message || "Failed to send email");
+    // Log the provider's own words — this is the only place the real reason
+    // exists, and losing it here is what makes delivery failures undebuggable.
+    console.error(
+      `[email] send failed to=${to} subject="${subject}" ` +
+        `status=${error.statusCode ?? "?"} name=${error.name ?? "?"}: ${error.message}`,
+    );
+    throw toApiError(error);
   }
+
   return { id: data?.id ?? null, skipped: false };
+}
+
+interface ResendError {
+  statusCode?: number | null;
+  name?: string;
+  message?: string;
+}
+
+/**
+ * Turns a Resend failure into something the caller can act on.
+ *
+ * The distinction that matters: a rejected recipient is the user's problem and
+ * they can fix it by using a different address, whereas an unverified sending
+ * domain or an outage is ours. Collapsing both into a 500 "Something went
+ * wrong" — which is what happened before — leaves nobody able to tell which.
+ */
+function toApiError(error: ResendError): ApiError {
+  const message = error.message ?? "Email delivery failed";
+
+  if (error.statusCode === 422 || error.name === "validation_error") {
+    return ApiError.badRequest(
+      `That email address was rejected by our mail provider. ${message}`,
+      "email_address_rejected",
+      { email: "This address can't receive mail from us" },
+    );
+  }
+
+  if (error.statusCode === 429) {
+    return ApiError.tooMany("Too many emails right now. Try again in a minute.");
+  }
+
+  if (error.statusCode === 403 || error.statusCode === 401) {
+    // Almost always an unverified EMAIL_FROM domain or a bad API key.
+    return ApiError.unavailable(
+      `Email delivery isn't configured correctly: ${message}`,
+      "email_not_configured",
+    );
+  }
+
+  return ApiError.unavailable(
+    `Couldn't send the email: ${message}`,
+    "email_delivery_failed",
+  );
 }
 
 const BRAND = "Hamyon";
